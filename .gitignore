@@ -3,6 +3,16 @@
 /node_modules
 /build
 
+# subproject build/deps (team-a backend, frontend)
+**/node_modules
+**/dist
+frontend/.next
+team-a/prisma/*.db
+team-a/prisma/*.db-journal
+
+# local tunnel binary (downloaded, not source)
+/tools
+
 # Logs
 logs
 *.log

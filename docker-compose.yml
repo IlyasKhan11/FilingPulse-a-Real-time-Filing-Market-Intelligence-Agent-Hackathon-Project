@@ -1,0 +1,34 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: ankane/pgvector:latest
+    container_name: filingpulse-postgres
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: filingpulse
+      POSTGRES_PASSWORD: filingpulse_secret
+      POSTGRES_DB: filingpulse_db
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks:
+      - filingpulse-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: filingpulse-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redisdata:/data
+    networks:
+      - filingpulse-network
+
+volumes:
+  pgdata:
+  redisdata:
+
+networks:
+  filingpulse-network:
+    driver: bridge
