@@ -23,9 +23,7 @@ export class EnrichmentService {
             Authorization: `Bearer ${process.env.AIML_API_KEY}`,
           },
           body: JSON.stringify({
-            model:
-              process.env.AIML_MODEL ??
-              'nemotron-3-nano-omni-30b-a3b-reasoning:free',
+            model: process.env.AIML_MODEL ?? 'claude-sonnet-4-5',
             max_tokens: 1000,
             messages: [
               {
