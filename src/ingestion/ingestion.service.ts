@@ -1,12 +1,14 @@
 import { Injectable } from '@nestjs/common';
 import { DetectionService } from '../detection/detection.service';
 import { EnrichmentService } from '../enrichment/enrichment.service';
+import { DeliveryService } from '../delivery/delivery.service';
 
 @Injectable()
 export class IngestionService {
   constructor(
     private readonly detectionService: DetectionService,
     private readonly enrichmentService: EnrichmentService,
+    private readonly deliveryService: DeliveryService,
   ) {}
 
   async handleIncoming(payload: any) {
@@ -25,7 +27,17 @@ export class IngestionService {
     // Gate 3 — Claude enrichment
     console.log(`Material change detected for ${payload.company} — calling enrichment`);
     const analysis = await this.enrichmentService.analyze(payload);
-    console.log(`Enrichment complete:`, analysis);
-    return { status: 'enriched', analysis };
+
+    // Gate 4 — Socket.io delivery
+    const alert = {
+      company: payload.company,
+      ticker: payload.ticker,
+      source_url: payload.source_url,
+      captured_at: payload.captured_at,
+      ...analysis,
+    };
+    this.deliveryService.sendAlert(alert);
+
+    return { status: 'enriched', alert };
   }
 }
