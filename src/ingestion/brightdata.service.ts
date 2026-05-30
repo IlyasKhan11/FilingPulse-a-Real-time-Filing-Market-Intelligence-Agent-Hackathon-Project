@@ -40,6 +40,18 @@ export class BrightDataService {
 
     const body = await response.text();
 
+    if (body.length === 0) {
+      console.warn(
+        'Bright Data returned an empty body',
+        JSON.stringify({
+          url: parsedUrl.toString(),
+          status: response.status,
+          statusText: response.statusText,
+          headers: Object.fromEntries(response.headers.entries()),
+        }),
+      );
+    }
+
     if (!response.ok) {
       throw new BadGatewayException(
         `Bright Data request failed with ${response.status}: ${body.slice(0, 300)}`,
