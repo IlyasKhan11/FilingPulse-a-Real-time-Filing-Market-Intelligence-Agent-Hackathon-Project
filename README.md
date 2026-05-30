@@ -25,6 +25,12 @@
 
 [Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
 
+## Demo ingestion
+
+`GET /scan?url=<target>` uses Bright Data Web Unlocker (`BRIGHT_DATA_API_TOKEN` and `BRIGHT_DATA_ZONE`) to fetch the page, normalize the HTML, strip page chrome, and pass the result through the existing ingestion, detection, enrichment, and Socket.io alert pipeline.
+
+For the hackathon demo, the "Scan Now" flow calls `/scan` directly. In production, the scheduler runs every 15 minutes via BullMQ on Redis with retries and rate limits around Bright Data usage.
+
 ## Project setup
 
 ```bash

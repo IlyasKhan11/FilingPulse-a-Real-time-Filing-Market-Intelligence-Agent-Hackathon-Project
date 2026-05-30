@@ -9,4 +9,4 @@ async function bootstrap() {
   await app.listen(port);
   console.log(`FilingPulse Team B (AI core) listening on http://localhost:${port}`);
 }
-bootstrap();
+void bootstrap();

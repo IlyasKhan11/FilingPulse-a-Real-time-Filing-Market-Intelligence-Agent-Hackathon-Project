@@ -29,9 +29,9 @@ One sentence. Don't explain the stack, don't explain the problem yet. Just the n
 - The cost of finding out late: missed trade, missed risk, regulatory exposure
 
 **Speaker note:**
-> "If you're an analyst at a small fund, or you're on a compliance team, you need to know the *second* a company files something material. A new 8-K, a leadership change, a quietly edited investor-relations page. Today you either refresh pages by hand or pay $24,000 a year for a Bloomberg terminal. Smaller teams get priced out — and in finance, finding out late means a missed trade or a missed risk."
+> "If you're an analyst at a small fund, or you're on a compliance team, you need to know the *second* a company files something material. A new 8-K, a leadership change, a quietly edited investor-relations page. Today you either refresh pages by hand or pay between $2,700 and $32,000 a year for a Bloomberg terminal. Smaller teams get priced out — and in finance, finding out late means a missed trade or a missed risk."
 
-Pause here. Let the number land. $24k/year is the anchor that makes the rest of the pitch feel like a bargain.
+Pause here. Let the number land. $32k/year is the anchor that makes the rest of the pitch feel like a bargain.
 
 ---
 

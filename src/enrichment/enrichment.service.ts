@@ -1,37 +1,41 @@
 import { Injectable } from '@nestjs/common';
+import {
+  EnrichmentAnalysis,
+  IngestPayload,
+} from '../ingestion/ingestion.types';
+
+type JsonRecord = Record<string, unknown>;
 
 @Injectable()
 export class EnrichmentService {
-  async analyze(payload: any) {
-    // No key configured → skip the expensive call and synthesize locally so the
-    // pipeline still produces a structured alert. Set AIML_API_KEY to use real Claude.
-    if (!process.env.AIML_API_KEY) {
-      console.log('AIML_API_KEY not set — using local synthesizer fallback.');
-      return this.synthesize(payload);
-    }
-
+  async analyze(payload: IngestPayload): Promise<EnrichmentAnalysis> {
     console.log('Calling AI/ML API...');
 
-    let data: any;
+    let data: unknown;
 
     try {
-      const response = await fetch('https://api.aimlapi.com/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${process.env.AIML_API_KEY}`,
-        },
-        body: JSON.stringify({
-          model: 'claude-sonnet-4-5',
-          max_tokens: 1000,
-          messages: [
-            {
-              role: 'system',
-              content: 'You are a compliance analyst. Always respond with valid JSON only. No markdown, no explanation, just the JSON object.',
-            },
-            {
-              role: 'user',
-              content: `Analyze this regulatory page change.
+      const response = await fetch(
+        'https://api.aimlapi.com/v1/chat/completions',
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${process.env.AIML_API_KEY}`,
+          },
+          body: JSON.stringify({
+            model:
+              process.env.AIML_MODEL ??
+              'nemotron-3-nano-omni-30b-a3b-reasoning:free',
+            max_tokens: 1000,
+            messages: [
+              {
+                role: 'system',
+                content:
+                  'You are a compliance analyst. Always respond with valid JSON only. No markdown, no explanation, just the JSON object.',
+              },
+              {
+                role: 'user',
+                content: `Analyze this regulatory page change.
 
 TEXT DIFF:
 ${payload.text_diff}
@@ -47,72 +51,190 @@ Respond ONLY with this JSON structure:
   "severity": "low or medium or high",
   "source_url": "${payload.source_url}"
 }`,
-            },
-          ],
-        }),
-      });
+              },
+            ],
+          }),
+        },
+      );
 
-      data = await response.json();
+      data = (await response.json()) as unknown;
       console.log('Raw API response:', JSON.stringify(data));
-
-    } catch (err) {
-      console.error('API call failed:', err.message, '— falling back to local synthesizer.');
-      return this.synthesize(payload);
+      if (!response.ok) {
+        console.error('AI/ML API returned an error:', response.status);
+        return this.localAnalysis(payload);
+      }
+    } catch (err: unknown) {
+      console.error('API call failed:', this.errorMessage(err));
+      return this.localAnalysis(payload);
     }
 
     try {
-      const raw = data.choices[0].message.content;
+      const raw = this.extractMessageContent(data);
+      if (!raw) {
+        throw new Error('Missing AI message content');
+      }
+
       const clean = raw.replace(/```json|```/g, '').trim();
-      const result = JSON.parse(clean);
+      const result = this.parseAnalysis(clean, payload.source_url);
       console.log('Claude analysis:', result);
       return result;
-    } catch (err) {
-      console.error('Failed to parse response:', err.message, '— falling back to local synthesizer.');
-      return this.synthesize(payload);
+    } catch (err: unknown) {
+      console.error('Failed to parse response:', this.errorMessage(err));
+      console.error('Full response was:', JSON.stringify(data));
+      return this.localAnalysis(payload);
     }
   }
 
-  /**
-   * Deterministic, keyless fallback. Classifies the diff by keywords and returns the
-   * same structured shape Claude would, so the pipeline keeps flowing without an API key.
-   */
-  private synthesize(payload: any) {
-    const diff: string = (payload.text_diff || '').toString();
-    const d = diff.toLowerCase();
-    const ticker = payload.ticker || '';
+  private parseAnalysis(raw: string, sourceUrl: string): EnrichmentAnalysis {
+    const parsed = JSON.parse(raw) as unknown;
+    const record = this.asRecord(parsed);
 
-    let what_changed = `Content change detected on ${ticker} monitored page.`;
-    let why_it_matters =
-      'Continuous monitoring flagged a substantive change on a watchlisted regulatory/IR page.';
-    let severity: 'low' | 'medium' | 'high' = 'low';
-    let confidence = 0.7;
-
-    if (/appoint|resign|departure|ceo|cfo|director|board|executive/.test(d)) {
-      what_changed = 'Leadership / board change detected in the filing or IR disclosure.';
-      why_it_matters =
-        'Executive and board changes often precede shifts in strategy or operational focus and are material to investors.';
-      severity = 'high';
-      confidence = 0.94;
-    } else if (/revenue|earnings|guidance|billion|million|quarter|dividend|buyback/.test(d)) {
-      what_changed = 'Financial / earnings-related disclosure was updated.';
-      why_it_matters =
-        'Changes to financial figures or guidance directly affect valuation and risk models.';
-      severity = 'medium';
-      confidence = 0.9;
-    } else if (/lawsuit|investigation|sec|litigation|recall|breach/.test(d)) {
-      what_changed = 'Potential legal / regulatory risk disclosure detected.';
-      why_it_matters =
-        'Legal or regulatory developments can carry significant financial and reputational impact.';
-      severity = 'high';
-      confidence = 0.88;
+    if (!record) {
+      throw new Error('AI response was not a JSON object');
     }
 
     return {
-      what_changed,
-      why_it_matters,
-      confidence,
+      what_changed: this.stringValue(
+        record.what_changed,
+        'Page content changed.',
+      ),
+      why_it_matters: this.stringValue(
+        record.why_it_matters,
+        'The update may be relevant for compliance or investor monitoring.',
+      ),
+      confidence: this.numberValue(record.confidence, 0.5),
+      severity: this.severityValue(record.severity),
+      source_url: this.stringValue(record.source_url, sourceUrl),
+      enrichment_provider: 'aiml',
+    };
+  }
+
+  private extractMessageContent(data: unknown): string | null {
+    const record = this.asRecord(data);
+    const choices = record?.choices;
+
+    if (!Array.isArray(choices)) {
+      return null;
+    }
+
+    const firstChoice = this.asRecord(choices[0]);
+    const message = this.asRecord(firstChoice?.message);
+    const content = message?.content;
+
+    return typeof content === 'string' ? content : null;
+  }
+
+  private localAnalysis(payload: IngestPayload): EnrichmentAnalysis {
+    const summary = this.summarizeChange(payload.text_diff);
+    const severity = this.estimateSeverity(payload.text_diff);
+
+    return {
+      what_changed: summary,
+      why_it_matters: this.localRationale(severity, payload.company),
+      confidence: severity === 'low' ? 0.55 : 0.62,
       severity,
       source_url: payload.source_url,
+      enrichment_provider: 'local_fallback',
     };
+  }
+
+  private summarizeChange(textDiff: string): string {
+    const clean = textDiff.replace(/\s+/g, ' ').trim();
+
+    if (!clean) {
+      return 'The monitored page changed, but no readable body text remained after normalization.';
+    }
+
+    const sentence = clean.match(/[^.!?]+[.!?]/)?.[0] ?? clean;
+    return this.truncate(sentence.trim(), 220);
+  }
+
+  private estimateSeverity(textDiff: string): EnrichmentAnalysis['severity'] {
+    const diff = textDiff.toLowerCase();
+
+    const highSignals = [
+      'bankruptcy',
+      'class action',
+      'delist',
+      'fraud',
+      'going concern',
+      'investigation',
+      'material weakness',
+      'restatement',
+      'sec investigation',
+      'subpoena',
+    ];
+
+    if (highSignals.some((signal) => diff.includes(signal))) {
+      return 'high';
+    }
+
+    const mediumSignals = [
+      '8-k',
+      '10-k',
+      '10-q',
+      'board',
+      'dividend',
+      'earnings',
+      'filing',
+      'guidance',
+      'investor',
+      'revenue',
+      'risk factor',
+      'shareholder',
+    ];
+
+    return mediumSignals.some((signal) => diff.includes(signal))
+      ? 'medium'
+      : 'low';
+  }
+
+  private localRationale(
+    severity: EnrichmentAnalysis['severity'],
+    company: string,
+  ): string {
+    if (severity === 'high') {
+      return `${company} has a change containing high-signal regulatory or investor-risk language, so it should be reviewed immediately.`;
+    }
+
+    if (severity === 'medium') {
+      return `${company} has a change touching filing, financial, governance, or investor-facing language that may affect compliance monitoring.`;
+    }
+
+    return `${company} has a captured page change that appears low severity, but it is still useful as a verified Bright Data ingestion event for the watchlist.`;
+  }
+
+  private truncate(value: string, maxLength: number): string {
+    if (value.length <= maxLength) {
+      return value;
+    }
+
+    return `${value.slice(0, maxLength - 3).trimEnd()}...`;
+  }
+
+  private asRecord(value: unknown): JsonRecord | null {
+    if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+      return null;
+    }
+
+    return value as JsonRecord;
+  }
+
+  private stringValue(value: unknown, fallback: string): string {
+    return typeof value === 'string' && value.trim() ? value : fallback;
+  }
+
+  private numberValue(value: unknown, fallback: number): number {
+    return typeof value === 'number' && Number.isFinite(value)
+      ? value
+      : fallback;
+  }
+
+  private severityValue(value: unknown): EnrichmentAnalysis['severity'] {
+    return value === 'medium' || value === 'high' ? value : 'low';
+  }
+
+  private errorMessage(error: unknown): string {
+    return error instanceof Error ? error.message : String(error);
   }
 }

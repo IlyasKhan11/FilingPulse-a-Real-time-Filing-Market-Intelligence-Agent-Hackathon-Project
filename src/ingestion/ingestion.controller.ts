@@ -1,27 +1,28 @@
-import { Controller, Post, Body } from '@nestjs/common';
+import { Controller, Post, Body, Get, Query } from '@nestjs/common';
 import { IngestionService } from './ingestion.service';
+import { IngestPayload } from './ingestion.types';
 
-// JSON contract Team A POSTs in (the normalized change diff).
-export class IngestDto {
-  companyId: string;
-  companyName: string;
-  ticker: string;
-  sourceUrl: string;
-  scannedAt: string;
-  previousHash: string;
-  currentHash: string;
-  previousNormalizedText: string;
-  currentNormalizedText: string;
-  diff: string;
+export class IngestDto implements IngestPayload {
+  company = '';
+  ticker = '';
+  source_url = '';
+  text_diff = '';
+  snapshot_id = '';
+  captured_at = '';
 }
 
-@Controller('ingest')
+@Controller()
 export class IngestionController {
   constructor(private readonly ingestionService: IngestionService) {}
 
-  @Post()
+  @Post('ingest')
   async receive(@Body() payload: IngestDto) {
-    const result = await this.ingestionService.handleIncoming(payload);
-    return { received: true, result };
+    await this.ingestionService.handleIncoming(payload);
+    return { status: 'received' };
+  }
+
+  @Get('scan')
+  async scan(@Query('url') url: string) {
+    return this.ingestionService.scanUrl(url);
   }
 }
