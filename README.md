@@ -1,104 +1,102 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+# FilingPulse — Know the Moment It Matters
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+Real-time filing intelligence for compliance teams, small funds, and analysts 
+who can't afford to find out late.
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+## What it does
 
-## Description
+FilingPulse monitors company filings and investor-relations pages continuously. 
+When something material changes — a new 8-K, a revised risk factor, a quiet IR 
+page edit — it detects the change, filters out cosmetic noise, and pushes a 
+structured AI-generated alert in real time.
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+Each alert contains:
+- **What changed** — plain English description
+- **Why it matters** — compliance and investor relevance  
+- **Confidence score** — 0.0 to 1.0
+- **Severity** — low / medium / high
+- **Source link** — verified URL
 
-## Demo ingestion
+## How it works
 
-`GET /scan?url=<target>` uses Bright Data Web Unlocker (`BRIGHT_DATA_API_TOKEN` and `BRIGHT_DATA_ZONE`) to fetch the page, normalize the HTML, strip page chrome, and pass the result through the existing ingestion, detection, enrichment, and Socket.io alert pipeline.
+Bright Data (SERP API + Web Unlocker)
+↓
+Normalize + SHA-256 hash
+↓
+Gate 1: Hash check — identical = discard
+↓
+Gate 2: Materiality filter — cosmetic = discard
+↓
+Gate 3: Claude AI enrichment — structured JSON alert
+↓
+Socket.io — live feed to frontend
 
-For the hackathon demo, the "Scan Now" flow calls `/scan` directly. In production, the scheduler runs every 15 minutes via BullMQ on Redis with retries and rate limits around Bright Data usage.
 
-## Project setup
+Two cheap gates run before the expensive AI call. On ~95% of fetches, 
+the LLM never fires.
 
-```bash
-$ npm install
-```
+## Demo watchlist
 
-## Compile and run the project
+| Company | Ticker | Why compliance cares |
+|---|---|---|
+| Super Micro Computer | SMCI | Filing delays, delisting risk |
+| MicroStrategy | MSTR | Bitcoin purchase 8-Ks, crypto leverage |
+| Unilever | UL | IR page edits outside EDGAR |
+| Boeing | BA | FAA + DOJ + SEC multi-regulator |
+| Carvana | CVNA | Going concern, covenant risk |
+| Tesla | TSLA | CEO disclosure, governance |
+| Palantir | PLTR | Government contract concentration |
+| JPMorgan Chase | JPM | Stress tests, capital requirements |
 
-```bash
-# development
-$ npm run start
+## Live demo
 
-# watch mode
-$ npm run start:dev
+Backend: https://filingpulse-backend-production.up.railway.app
 
-# production mode
-$ npm run start:prod
-```
+Scan a company:GET /scan?url=https://ir.microstrategy.com/news-releases
 
-## Run tests
 
-```bash
-# unit tests
-$ npm run test
+## Tech stack
 
-# e2e tests
-$ npm run test:e2e
+- **NestJS** — backend orchestration
+- **Bright Data** — Web Unlocker + SERP API (ingestion)
+- **Claude via AI/ML API** — AI enrichment
+- **Redis + BullMQ** — job queue and rate limiting
+- **Postgres / NeonDB** — storage
+- **Socket.io** — live feed delivery
+- **React + Vite** — frontend dashboard
 
-# test coverage
-$ npm run test:cov
-```
-
-## Deployment
-
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
-
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
+## Running locally
 
 ```bash
-$ npm install -g @nestjs/mau
-$ mau deploy
+# Backend
+cd filingpulse-backend
+npm install
+cp .envexample .env
+# Add your keys to .env
+npm run start
+
+# Frontend
+cd frontend
+npm install
+npm run dev
 ```
 
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
+## Environment variables
+AIML_API_KEY=your_aiml_api_key
+BRIGHTDATA_WEB_UNLOCKER_PROXY=your_proxy_string
+DATABASE_URL=your_postgres_url
 
-## Resources
 
-Check out a few resources that may come in handy when working with NestJS:
+## Team
 
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
+| Name | Role |
+|---|---|
+| Muhammad Ilyas Khan | Engineering + Product |
+| Lucy Michaels | Product + Finance |
+| Abdul Moiz Sheraz | Data + AI |
+| Robynn Robyn | Data + AI |
+| Letlhogonolo Fanampe | Engineering |
 
-## Support
+---
 
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
-
-## Stay in touch
-
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
-
-## License
-
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+Built at the Bright Data AI Agents Hackathon 2026.
