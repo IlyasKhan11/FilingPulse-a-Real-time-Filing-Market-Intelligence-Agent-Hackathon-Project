@@ -1,0 +1,52 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model Company {
+  id          String     @id @default(uuid())
+  ticker      String     @unique
+  name        String
+  irUrl       String?
+  filingsUrl  String?
+  createdAt   DateTime   @default(now())
+  snapshots   Snapshot[]
+  alerts      Alert[]
+
+  @@map("companies")
+}
+
+model Snapshot {
+  id          String   @id @default(uuid())
+  companyId   String   @map("company_id")
+  url         String
+  rawHtml     String   @map("raw_html")
+  cleanText   String   @map("clean_text")
+  contentHash String   @map("content_hash")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@map("snapshots")
+}
+
+model Alert {
+  id           String   @id @default(uuid())
+  companyId    String   @map("company_id")
+  title        String
+  summary      String
+  whatChanged  String   @map("what_changed")
+  whyItMatters String   @map("why_it_matters")
+  confidence   Float
+  severity     String   // INFO, LOW, MEDIUM, HIGH, CRITICAL
+  sourceLink   String   @map("source_link")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  company      Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@map("alerts")
+}
