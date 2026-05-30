@@ -8,7 +8,7 @@ const fs = require('fs');
 const path = require('path');
 
 const file = path.join(__dirname, 'index.html');
-const PORT = 8090;
+const PORT = process.env.PORT || 8090;
 
 // ---- One-click scenario presets (escalating, great for a demo) ----
 const PRESETS = {
